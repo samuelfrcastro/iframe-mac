@@ -1,14 +1,24 @@
 /**
- * IframeMacLauncher — botão flutuante 🤖 + popup com o IframeMacChat.
- * É O launcher canónico da frota: os sites React montam-no diretamente;
- * o widget.global.js (sites sem React) monta exatamente este componente.
+ * IframeMacLauncher — botão flutuante 🤖 + popup com o chat canónico da frota.
+ * É O launcher único: os sites React montam-no diretamente; o widget.global.js
+ * (sites sem React) monta exatamente este componente.
+ *
+ * Por defeito o popup abre o /embed.html do próprio site (o chat COMPLETO do
+ * iocmanager/dashboard: modos Rápido/Editor/Terminal via haiku-bridge, Fila,
+ * histórico, anexos, Telegram fallback). O embed.html é sincronizado para o
+ * public/ de todos os sites pelo `release`. variant="chat" mantém o
+ * IframeMacChat simples (canal bridge-<site>, daemon iframe-mac).
  */
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { IframeMacChat } from './IframeMacChat';
 
 export interface IframeMacLauncherProps {
-  /** Canal Realtime do site (ex. 'bridge-picanholo'). */
+  /** Canal Realtime do site (ex. 'bridge-picanholo') — usado no variant "chat" e para derivar o site. */
   channel: string;
+  /** Nome do site para o embed (?site=...); default = canal sem o prefixo 'bridge-'. */
+  site?: string;
+  /** 'embed' (default) = chat completo /embed.html · 'chat' = IframeMacChat simples. */
+  variant?: 'embed' | 'chat';
   /** Título do popup (default 'Consola dev'). */
   title?: string;
   /** Cor do botão flutuante (default azul #2563eb). */
@@ -16,7 +26,7 @@ export interface IframeMacLauncherProps {
   /**
    * 'claude' (default): só aparece com ?claude=1 na URL (persiste em localStorage
    * tb-enabled; ?claude=0 desliga) — para sites públicos. O acesso real é sempre
-   * protegido pelo código HMAC; isto só esconde a UI.
+   * protegido (token admin/JWT no embed; HMAC no chat); isto só esconde a UI.
    * 'always': aparece sempre — para ferramentas internas.
    */
   gate?: 'claude' | 'always';
@@ -24,6 +34,8 @@ export interface IframeMacLauncherProps {
 
 export function IframeMacLauncher({
   channel,
+  site,
+  variant = 'embed',
   title = 'Consola dev',
   brand = '#2563eb',
   gate = 'claude',
@@ -31,6 +43,26 @@ export function IframeMacLauncher({
   const [enabled, setEnabled] = useState(gate === 'always');
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const siteName = site || channel.replace(/^bridge-/, '');
+
+  // Contexto de página para o embed (mesmo contrato do ChatIframe do iocmanager).
+  useEffect(() => {
+    if (variant !== 'embed' || !open) return;
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const send = () => {
+      try {
+        iframe.contentWindow?.postMessage(
+          { type: 'page', path: window.location.pathname, title: document.title, site: siteName },
+          window.location.origin
+        );
+      } catch { /* noop */ }
+    };
+    send();
+    iframe.addEventListener('load', send);
+    return () => iframe.removeEventListener('load', send);
+  }, [variant, open, siteName]);
 
   useEffect(() => {
     if (gate === 'always') return;
@@ -108,7 +140,17 @@ export function IframeMacLauncher({
             </button>
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>
-            <IframeMacChat channel={channel} />
+            {variant === 'embed' ? (
+              <iframe
+                ref={iframeRef}
+                src={`/embed.html?site=${encodeURIComponent(siteName)}`}
+                title={title}
+                allow="clipboard-write"
+                style={{ width: '100%', height: '100%', border: 0, display: 'block', background: '#0f1117' }}
+              />
+            ) : (
+              <IframeMacChat channel={channel} />
+            )}
           </div>
         </div>
       )}

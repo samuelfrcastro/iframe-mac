@@ -77,8 +77,12 @@ interface IframeMacChatProps {
 declare function IframeMacChat({ supabase, channel, enabled, title, placeholder, defaultMode, }: IframeMacChatProps): react.JSX.Element;
 
 interface IframeMacLauncherProps {
-    /** Canal Realtime do site (ex. 'bridge-picanholo'). */
+    /** Canal Realtime do site (ex. 'bridge-picanholo') — usado no variant "chat" e para derivar o site. */
     channel: string;
+    /** Nome do site para o embed (?site=...); default = canal sem o prefixo 'bridge-'. */
+    site?: string;
+    /** 'embed' (default) = chat completo /embed.html · 'chat' = IframeMacChat simples. */
+    variant?: 'embed' | 'chat';
     /** Título do popup (default 'Consola dev'). */
     title?: string;
     /** Cor do botão flutuante (default azul #2563eb). */
@@ -86,11 +90,11 @@ interface IframeMacLauncherProps {
     /**
      * 'claude' (default): só aparece com ?claude=1 na URL (persiste em localStorage
      * tb-enabled; ?claude=0 desliga) — para sites públicos. O acesso real é sempre
-     * protegido pelo código HMAC; isto só esconde a UI.
+     * protegido (token admin/JWT no embed; HMAC no chat); isto só esconde a UI.
      * 'always': aparece sempre — para ferramentas internas.
      */
     gate?: 'claude' | 'always';
 }
-declare function IframeMacLauncher({ channel, title, brand, gate, }: IframeMacLauncherProps): react.JSX.Element | null;
+declare function IframeMacLauncher({ channel, site, variant, title, brand, gate, }: IframeMacLauncherProps): react.JSX.Element | null;
 
 export { type BridgeMessage, type IframeMac, IframeMacChat, type IframeMacChatProps, IframeMacLauncher, type IframeMacLauncherProps, type UseIframeMacOptions, useIframeMac };

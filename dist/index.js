@@ -639,10 +639,12 @@ function IframeMacChat({
 }
 
 // src/Launcher.tsx
-import { useEffect as useEffect3, useState as useState3 } from "react";
+import { useEffect as useEffect3, useRef as useRef3, useState as useState3 } from "react";
 import { Fragment as Fragment2, jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
 function IframeMacLauncher({
   channel,
+  site,
+  variant = "embed",
   title = "Consola dev",
   brand = "#2563eb",
   gate = "claude"
@@ -650,6 +652,25 @@ function IframeMacLauncher({
   const [enabled, setEnabled] = useState3(gate === "always");
   const [open, setOpen] = useState3(false);
   const [expanded, setExpanded] = useState3(false);
+  const iframeRef = useRef3(null);
+  const siteName = site || channel.replace(/^bridge-/, "");
+  useEffect3(() => {
+    if (variant !== "embed" || !open) return;
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const send = () => {
+      try {
+        iframe.contentWindow?.postMessage(
+          { type: "page", path: window.location.pathname, title: document.title, site: siteName },
+          window.location.origin
+        );
+      } catch {
+      }
+    };
+    send();
+    iframe.addEventListener("load", send);
+    return () => iframe.removeEventListener("load", send);
+  }, [variant, open, siteName]);
   useEffect3(() => {
     if (gate === "always") return;
     const qs = new URLSearchParams(window.location.search);
@@ -759,7 +780,16 @@ function IframeMacLauncher({
           ]
         }
       ),
-      /* @__PURE__ */ jsx2("div", { style: { flex: 1, minHeight: 0 }, children: /* @__PURE__ */ jsx2(IframeMacChat, { channel }) })
+      /* @__PURE__ */ jsx2("div", { style: { flex: 1, minHeight: 0 }, children: variant === "embed" ? /* @__PURE__ */ jsx2(
+        "iframe",
+        {
+          ref: iframeRef,
+          src: `/embed.html?site=${encodeURIComponent(siteName)}`,
+          title,
+          allow: "clipboard-write",
+          style: { width: "100%", height: "100%", border: 0, display: "block", background: "#0f1117" }
+        }
+      ) : /* @__PURE__ */ jsx2(IframeMacChat, { channel }) })
     ] })
   ] });
 }

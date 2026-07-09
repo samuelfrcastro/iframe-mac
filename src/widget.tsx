@@ -16,6 +16,8 @@ import { IframeMacLauncher, type IframeMacLauncherProps } from './Launcher';
 const script = (typeof document !== 'undefined' ? document.currentScript : null) as HTMLScriptElement | null;
 const CFG: IframeMacLauncherProps = {
   channel: script?.dataset.channel || (globalThis as any).IFRAME_MAC_CHANNEL || 'iframe-mac',
+  site: script?.dataset.site || undefined,
+  variant: (script?.dataset.variant as IframeMacLauncherProps['variant']) || 'embed',
   title: script?.dataset.title || 'Consola dev',
   brand: script?.dataset.brand || '#2563eb',
   gate: (script?.dataset.gate as IframeMacLauncherProps['gate']) || 'claude',
