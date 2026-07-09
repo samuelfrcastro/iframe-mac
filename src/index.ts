@@ -6,3 +6,5 @@ export type {
   UseIframeMacOptions,
 } from './useIframeMac';
 export type { IframeMacChatProps } from './IframeMacChat';
+export { IframeMacLauncher } from './Launcher';
+export type { IframeMacLauncherProps } from './Launcher';

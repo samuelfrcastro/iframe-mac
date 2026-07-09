@@ -76,4 +76,21 @@ interface IframeMacChatProps {
  */
 declare function IframeMacChat({ supabase, channel, enabled, title, placeholder, defaultMode, }: IframeMacChatProps): react.JSX.Element;
 
-export { type BridgeMessage, type IframeMac, IframeMacChat, type IframeMacChatProps, type UseIframeMacOptions, useIframeMac };
+interface IframeMacLauncherProps {
+    /** Canal Realtime do site (ex. 'bridge-picanholo'). */
+    channel: string;
+    /** Título do popup (default 'Consola dev'). */
+    title?: string;
+    /** Cor do botão flutuante (default azul #2563eb). */
+    brand?: string;
+    /**
+     * 'claude' (default): só aparece com ?claude=1 na URL (persiste em localStorage
+     * tb-enabled; ?claude=0 desliga) — para sites públicos. O acesso real é sempre
+     * protegido pelo código HMAC; isto só esconde a UI.
+     * 'always': aparece sempre — para ferramentas internas.
+     */
+    gate?: 'claude' | 'always';
+}
+declare function IframeMacLauncher({ channel, title, brand, gate, }: IframeMacLauncherProps): react.JSX.Element | null;
+
+export { type BridgeMessage, type IframeMac, IframeMacChat, type IframeMacChatProps, IframeMacLauncher, type IframeMacLauncherProps, type UseIframeMacOptions, useIframeMac };
