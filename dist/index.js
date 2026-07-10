@@ -641,6 +641,18 @@ function IframeMacChat({
 // src/Launcher.tsx
 import { useEffect as useEffect3, useRef as useRef3, useState as useState3 } from "react";
 import { Fragment as Fragment2, jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
+function sanitizePagePath(raw) {
+  try {
+    const u = new URL(raw, window.location.origin);
+    for (const k of [...u.searchParams.keys()]) {
+      if (/^(claude|token|access_token|refresh_token|apikey|api_key|key|secret|jwt|code|state)$/i.test(k)) u.searchParams.delete(k);
+    }
+    const qs = u.searchParams.toString();
+    return u.pathname + (qs ? "?" + qs : "");
+  } catch {
+    return raw.split("#")[0].split("?")[0];
+  }
+}
 function IframeMacLauncher({
   channel,
   site,
@@ -658,18 +670,45 @@ function IframeMacLauncher({
     if (variant !== "embed" || !open) return;
     const iframe = iframeRef.current;
     if (!iframe) return;
-    const send = () => {
+    let last = "";
+    const send = (force) => {
       try {
+        const path = sanitizePagePath(window.location.pathname + window.location.search);
+        const key = path + "\0" + document.title;
+        if (!force && key === last) return;
+        last = key;
         iframe.contentWindow?.postMessage(
-          { type: "page", path: window.location.pathname, title: document.title, site: siteName },
+          { type: "page", path, title: document.title, site: siteName },
           window.location.origin
         );
       } catch {
       }
     };
-    send();
-    iframe.addEventListener("load", send);
-    return () => iframe.removeEventListener("load", send);
+    const onNav = () => send();
+    const onLoad = () => send(true);
+    send(true);
+    iframe.addEventListener("load", onLoad);
+    const origPush = history.pushState;
+    const origReplace = history.replaceState;
+    history.pushState = function(...a) {
+      origPush.apply(this, a);
+      onNav();
+    };
+    history.replaceState = function(...a) {
+      origReplace.apply(this, a);
+      onNav();
+    };
+    window.addEventListener("popstate", onNav);
+    window.addEventListener("hashchange", onNav);
+    const timer = setInterval(onNav, 2e3);
+    return () => {
+      iframe.removeEventListener("load", onLoad);
+      history.pushState = origPush;
+      history.replaceState = origReplace;
+      window.removeEventListener("popstate", onNav);
+      window.removeEventListener("hashchange", onNav);
+      clearInterval(timer);
+    };
   }, [variant, open, siteName]);
   useEffect3(() => {
     if (gate === "always") return;
