@@ -45,6 +45,12 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd();
 const CHANNEL = process.env.BRIDGE_CHANNEL || "iframe-mac";
 const MODEL = process.env.BRIDGE_MODEL || "";
+// Fallback Fable→Opus: quando o modelo efetivo é o Fable 5 (explícito ou o
+// default do CLI, que na frota é fable), cai para Opus 4.8 se o limite do
+// Fable bater; o CLI volta a tentar o Fable na invocação seguinte.
+// BRIDGE_FALLBACK_MODEL sobrepõe ("off" desliga).
+const FALLBACK_MODEL = process.env.BRIDGE_FALLBACK_MODEL
+  || ((!MODEL || MODEL === "claude-fable-5") ? "claude-opus-4-8" : "");
 
 // Modo por defeito (usado quando o frontend não envia payload.mode). Por mensagem,
 // o frontend pode escolher qualquer um dos três: "direct" | "queue" | "terminal".
@@ -258,6 +264,7 @@ function runClaudeStreaming(prompt, { onText, onTool, onSession } = {}) {
     ];
     if (claudeSession) args.push("--resume", claudeSession);
     if (MODEL) args.push("--model", MODEL);
+    if (FALLBACK_MODEL && FALLBACK_MODEL !== "off") args.push("--fallback-model", FALLBACK_MODEL);
 
     const child = spawn("claude", args, { cwd: ROOT, env: childEnv });
     const rl = readline.createInterface({ input: child.stdout });
