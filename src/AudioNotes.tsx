@@ -70,7 +70,8 @@ async function fetchVoiceNotes(apiBase?: string, limit = 200): Promise<VoiceNote
   let lastErr: unknown = null;
   for (const base of bases) {
     try {
-      const r = await fetch(`${base}/api/whatsapp/messages?limit=${limit}`, { credentials: 'omit' });
+      // gw=all → o dashboard junta os dois gateways (whatsapp-gw :3020 + -gw-2 :3025).
+      const r = await fetch(`${base}/api/whatsapp/messages?gw=all&limit=${limit}`, { credentials: 'omit' });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const body = await r.json();
       const msgs: WaMessage[] = Array.isArray(body?.messages) ? body.messages : [];
