@@ -94,7 +94,11 @@ interface IframeMacLauncherProps {
      * 'always': aparece sempre — para ferramentas internas.
      */
     gate?: 'claude' | 'always';
+    /** Zona 🎙️ Áudios (voice notes do WhatsApp transcritas). Default true. */
+    audio?: boolean;
+    /** Base da API do dashboard para as transcrições. Default: mesma origem → Tailscale. */
+    api?: string;
 }
-declare function IframeMacLauncher({ channel, site, variant, title, brand, gate, }: IframeMacLauncherProps): react.JSX.Element | null;
+declare function IframeMacLauncher({ channel, site, variant, title, brand, gate, audio, api, }: IframeMacLauncherProps): react.JSX.Element | null;
 
 export { type BridgeMessage, type IframeMac, IframeMacChat, type IframeMacChatProps, IframeMacLauncher, type IframeMacLauncherProps, type UseIframeMacOptions, useIframeMac };

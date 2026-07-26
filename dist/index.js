@@ -639,8 +639,156 @@ function IframeMacChat({
 }
 
 // src/Launcher.tsx
-import { useEffect as useEffect3, useRef as useRef3, useState as useState3 } from "react";
-import { Fragment as Fragment2, jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
+import { useEffect as useEffect4, useRef as useRef4, useState as useState4 } from "react";
+
+// src/AudioNotes.tsx
+import { useCallback as useCallback2, useEffect as useEffect3, useRef as useRef3, useState as useState3 } from "react";
+import { jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
+var DASHBOARD_API = "https://ioc-1.tail215de3.ts.net:4748";
+var READ_KEY = "tb-audio-read";
+function prettyFrom(m) {
+  if (m.pushName) return m.pushName;
+  const jid = String(m.participant || m.from || "");
+  const [user, server] = jid.split("@");
+  if (!user) return "Desconhecido";
+  if (server === "g.us") return "Grupo";
+  if (server === "lid") return `Contacto \xB7${user.slice(-4)}`;
+  const d = user.replace(/[^0-9]/g, "");
+  if (d.length >= 11) return `+${d.slice(0, d.length - 9)} ${d.slice(-9, -6)} ${d.slice(-6, -3)} ${d.slice(-3)}`;
+  return d ? `+${d}` : jid;
+}
+function prettyTime(ts) {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts;
+  const now = /* @__PURE__ */ new Date();
+  const hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  if (d.toDateString() === now.toDateString()) return hm;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")} ${hm}`;
+}
+var resolvedBase = null;
+async function fetchVoiceNotes(apiBase, limit = 200) {
+  const bases = apiBase != null ? [apiBase] : resolvedBase != null ? [resolvedBase] : ["", DASHBOARD_API];
+  let lastErr = null;
+  for (const base of bases) {
+    try {
+      const r = await fetch(`${base}/api/whatsapp/messages?limit=${limit}`, { credentials: "omit" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const body = await r.json();
+      const msgs = Array.isArray(body?.messages) ? body.messages : [];
+      if (!Array.isArray(body?.messages)) throw new Error("resposta sem messages[]");
+      resolvedBase = base;
+      const seen = /* @__PURE__ */ new Set();
+      const out = [];
+      for (const m of msgs) {
+        const t = typeof m.transcript === "string" ? m.transcript.trim() : "";
+        if (m.dir !== "in" || !t) continue;
+        if (!m.is_voice && m.raw_type !== "audioMessage") continue;
+        const id = m.id || `${m.ts}-${m.from}`;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        out.push({ id, ts: m.ts || "", who: prettyFrom(m), text: t });
+      }
+      out.sort((a, b) => a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0);
+      return out;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  resolvedBase = null;
+  throw lastErr instanceof Error ? lastErr : new Error("falhou");
+}
+function useVoiceNotes(enabled, active, open, apiBase) {
+  const [notes, setNotes] = useState3([]);
+  const [error, setError] = useState3(null);
+  const [loading, setLoading] = useState3(true);
+  const [lastRead, setLastRead] = useState3(() => {
+    try {
+      return localStorage.getItem(READ_KEY) || "";
+    } catch {
+      return "";
+    }
+  });
+  const load = useCallback2(() => {
+    fetchVoiceNotes(apiBase).then((n) => {
+      setNotes(n);
+      setError(null);
+    }).catch((e) => setError(e?.message || "sem liga\xE7\xE3o ao dashboard")).finally(() => setLoading(false));
+  }, [apiBase]);
+  const loadRef = useRef3(load);
+  loadRef.current = load;
+  useEffect3(() => {
+    if (!enabled) return;
+    const period = active ? 25e3 : open ? 6e4 : 3e5;
+    loadRef.current();
+    const t = setInterval(() => loadRef.current(), period);
+    return () => clearInterval(t);
+  }, [enabled, active, open]);
+  useEffect3(() => {
+    if (!active || !notes.length) return;
+    const newest = notes[0].ts;
+    if (newest && newest > lastRead) {
+      try {
+        localStorage.setItem(READ_KEY, newest);
+      } catch {
+      }
+      setLastRead(newest);
+    }
+  }, [active, notes, lastRead]);
+  const unread = lastRead ? notes.filter((n) => n.ts > lastRead).length : notes.length;
+  return { notes, error, loading, unread, reload: load };
+}
+function AudioNotesPanel({
+  notes,
+  error,
+  loading,
+  onReload
+}) {
+  return /* @__PURE__ */ jsxs2("div", { style: { height: "100%", overflowY: "auto", background: "#0f1117", padding: 10 }, children: [
+    loading && !notes.length && /* @__PURE__ */ jsx2("div", { style: { color: "#64748b", fontSize: 12, padding: 16, textAlign: "center" }, children: "a carregar\u2026" }),
+    error && !notes.length && /* @__PURE__ */ jsxs2("div", { style: { color: "#f59e0b", fontSize: 12, padding: 16, textAlign: "center", lineHeight: 1.6 }, children: [
+      "N\xE3o consegui ler as transcri\xE7\xF5es (",
+      error,
+      ").",
+      /* @__PURE__ */ jsx2("br", {}),
+      /* @__PURE__ */ jsx2(
+        "button",
+        {
+          onClick: onReload,
+          style: { marginTop: 10, background: "rgba(255,255,255,0.08)", border: "none", color: "#e2e8f0", borderRadius: 6, padding: "5px 12px", fontSize: 12, cursor: "pointer" },
+          children: "Tentar de novo"
+        }
+      )
+    ] }),
+    !loading && !error && !notes.length && /* @__PURE__ */ jsxs2("div", { style: { color: "#64748b", fontSize: 12, padding: 16, textAlign: "center", lineHeight: 1.6 }, children: [
+      "Ainda n\xE3o h\xE1 voice notes transcritas.",
+      /* @__PURE__ */ jsx2("br", {}),
+      /* @__PURE__ */ jsx2("span", { style: { fontSize: 11 }, children: "Envia um \xE1udio para 912814143 ou 937857366." })
+    ] }),
+    notes.map((n) => /* @__PURE__ */ jsxs2(
+      "div",
+      {
+        style: {
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.07)",
+          borderRadius: 10,
+          padding: "9px 11px",
+          marginBottom: 8
+        },
+        children: [
+          /* @__PURE__ */ jsxs2("div", { style: { display: "flex", alignItems: "baseline", gap: 8, marginBottom: 5 }, children: [
+            /* @__PURE__ */ jsx2("span", { style: { fontSize: 12, fontWeight: 600, color: "#93c5fd", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: n.who }),
+            /* @__PURE__ */ jsx2("span", { style: { marginLeft: "auto", fontSize: 10, color: "#64748b", flexShrink: 0 }, children: prettyTime(n.ts) })
+          ] }),
+          /* @__PURE__ */ jsx2("div", { style: { fontSize: 12.5, color: "#e2e8f0", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }, children: n.text })
+        ]
+      },
+      n.id
+    ))
+  ] });
+}
+
+// src/Launcher.tsx
+import { Fragment as Fragment2, jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
 function sanitizePagePath(raw) {
   try {
     const u = new URL(raw, window.location.origin);
@@ -659,14 +807,20 @@ function IframeMacLauncher({
   variant = "embed",
   title = "Consola dev",
   brand = "#2563eb",
-  gate = "claude"
+  gate = "claude",
+  audio = true,
+  api
 }) {
-  const [enabled, setEnabled] = useState3(gate === "always");
-  const [open, setOpen] = useState3(false);
-  const [expanded, setExpanded] = useState3(false);
-  const iframeRef = useRef3(null);
+  const [enabled, setEnabled] = useState4(gate === "always");
+  const [open, setOpen] = useState4(false);
+  const [expanded, setExpanded] = useState4(false);
+  const [tab, setTab] = useState4("chat");
+  const iframeRef = useRef4(null);
   const siteName = site || channel.replace(/^bridge-/, "");
-  useEffect3(() => {
+  const audioOn = audio && enabled;
+  const { notes, error: audioError, loading: audioLoading, unread, reload: reloadAudio } = useVoiceNotes(audioOn, open && tab === "audio", open, api);
+  const badge = audioOn ? unread : 0;
+  useEffect4(() => {
     if (variant !== "embed" || !open) return;
     const iframe = iframeRef.current;
     if (!iframe) return;
@@ -710,7 +864,7 @@ function IframeMacLauncher({
       clearInterval(timer);
     };
   }, [variant, open, siteName]);
-  useEffect3(() => {
+  useEffect4(() => {
     if (gate === "always") return;
     const qs = new URLSearchParams(window.location.search);
     const param = qs.get("claude");
@@ -753,37 +907,77 @@ function IframeMacLauncher({
     display: "flex",
     flexDirection: "column"
   };
-  return /* @__PURE__ */ jsxs2(Fragment2, { children: [
-    /* @__PURE__ */ jsx2(
-      "button",
-      {
-        type: "button",
-        onClick: () => setOpen((o) => !o),
-        title,
-        style: {
-          position: "fixed",
-          bottom: 20,
-          right: 20,
-          zIndex: 2147483646,
-          width: 52,
-          height: 52,
-          borderRadius: 9999,
-          border: "none",
-          cursor: "pointer",
-          background: brand,
-          color: "#fff",
-          fontSize: 22,
-          boxShadow: open ? "0 0 0 4px rgba(37,99,235,0.3), 0 8px 24px rgba(0,0,0,0.4)" : "0 4px 16px rgba(0,0,0,0.35)",
-          transition: "all 0.15s ease",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center"
-        },
-        children: open ? "\u2715" : "\u{1F916}"
-      }
-    ),
-    open && /* @__PURE__ */ jsxs2("div", { style: popupStyle, "data-iframe-mac-ignore": "true", children: [
-      /* @__PURE__ */ jsxs2(
+  const tabStyle = (on) => ({
+    flex: 1,
+    background: on ? "rgba(37,99,235,0.18)" : "transparent",
+    border: "none",
+    borderBottom: on ? "2px solid #3b82f6" : "2px solid transparent",
+    color: on ? "#e2e8f0" : "#64748b",
+    fontSize: 11.5,
+    fontWeight: 600,
+    cursor: "pointer",
+    padding: "7px 4px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5
+  });
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    /* @__PURE__ */ jsxs3("div", { style: { position: "fixed", bottom: 20, right: 20, zIndex: 2147483646 }, children: [
+      /* @__PURE__ */ jsx3(
+        "button",
+        {
+          type: "button",
+          onClick: () => setOpen((o) => !o),
+          title,
+          style: {
+            width: 52,
+            height: 52,
+            borderRadius: 9999,
+            border: "none",
+            cursor: "pointer",
+            background: brand,
+            color: "#fff",
+            fontSize: 22,
+            boxShadow: open ? "0 0 0 4px rgba(37,99,235,0.3), 0 8px 24px rgba(0,0,0,0.4)" : "0 4px 16px rgba(0,0,0,0.35)",
+            transition: "all 0.15s ease",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          },
+          children: open ? "\u2715" : "\u{1F916}"
+        }
+      ),
+      !open && badge > 0 && /* @__PURE__ */ jsx3(
+        "span",
+        {
+          "data-testid": "tb-audio-badge",
+          title: `${badge} transcri\xE7\xE3o(\xF5es) por ler`,
+          style: {
+            position: "absolute",
+            top: -3,
+            right: -3,
+            minWidth: 20,
+            height: 20,
+            padding: "0 5px",
+            borderRadius: 9999,
+            background: "#ef4444",
+            color: "#fff",
+            fontSize: 11,
+            fontWeight: 700,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "2px solid #0f1117",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+            pointerEvents: "none"
+          },
+          children: badge > 99 ? "99+" : badge
+        }
+      )
+    ] }),
+    open && /* @__PURE__ */ jsxs3("div", { style: popupStyle, "data-iframe-mac-ignore": "true", children: [
+      /* @__PURE__ */ jsxs3(
         "div",
         {
           style: {
@@ -796,9 +990,9 @@ function IframeMacLauncher({
             background: "rgba(255,255,255,0.03)"
           },
           children: [
-            /* @__PURE__ */ jsx2("span", { style: { fontSize: 15 }, children: "\u{1F916}" }),
-            /* @__PURE__ */ jsx2("div", { style: { flex: 1, fontSize: 12, fontWeight: 600, color: "#e2e8f0" }, children: title }),
-            /* @__PURE__ */ jsx2(
+            /* @__PURE__ */ jsx3("span", { style: { fontSize: 15 }, children: "\u{1F916}" }),
+            /* @__PURE__ */ jsx3("div", { style: { flex: 1, fontSize: 12, fontWeight: 600, color: "#e2e8f0" }, children: title }),
+            /* @__PURE__ */ jsx3(
               "button",
               {
                 onClick: () => setExpanded((e) => !e),
@@ -807,7 +1001,7 @@ function IframeMacLauncher({
                 children: expanded ? "\u22A1" : "\u229E"
               }
             ),
-            /* @__PURE__ */ jsx2(
+            /* @__PURE__ */ jsx3(
               "button",
               {
                 onClick: () => setOpen(false),
@@ -819,7 +1013,14 @@ function IframeMacLauncher({
           ]
         }
       ),
-      /* @__PURE__ */ jsx2("div", { style: { flex: 1, minHeight: 0 }, children: variant === "embed" ? /* @__PURE__ */ jsx2(
+      audioOn && /* @__PURE__ */ jsxs3("div", { style: { display: "flex", flexShrink: 0, borderBottom: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.02)" }, children: [
+        /* @__PURE__ */ jsx3("button", { type: "button", onClick: () => setTab("chat"), style: tabStyle(tab === "chat"), children: "\u{1F4AC} Chat" }),
+        /* @__PURE__ */ jsxs3("button", { type: "button", onClick: () => setTab("audio"), style: tabStyle(tab === "audio"), children: [
+          "\u{1F399}\uFE0F \xC1udios",
+          badge > 0 && /* @__PURE__ */ jsx3("span", { style: { background: "#ef4444", color: "#fff", borderRadius: 9999, fontSize: 9.5, fontWeight: 700, padding: "1px 5px", lineHeight: 1.4 }, children: badge > 99 ? "99+" : badge })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsx3("div", { style: { flex: 1, minHeight: 0, display: tab === "chat" ? "block" : "none" }, children: variant === "embed" ? /* @__PURE__ */ jsx3(
         "iframe",
         {
           ref: iframeRef,
@@ -828,7 +1029,8 @@ function IframeMacLauncher({
           allow: "clipboard-write",
           style: { width: "100%", height: "100%", border: 0, display: "block", background: "#0f1117" }
         }
-      ) : /* @__PURE__ */ jsx2(IframeMacChat, { channel }) })
+      ) : /* @__PURE__ */ jsx3(IframeMacChat, { channel }) }),
+      audioOn && tab === "audio" && /* @__PURE__ */ jsx3("div", { style: { flex: 1, minHeight: 0 }, "data-testid": "tb-audio-panel", children: /* @__PURE__ */ jsx3(AudioNotesPanel, { notes, error: audioError, loading: audioLoading, onReload: reloadAudio }) })
     ] })
   ] });
 }

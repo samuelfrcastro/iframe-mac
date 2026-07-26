@@ -9,6 +9,8 @@
  * data-title    título do popup (default "Consola dev")
  * data-brand    cor do botão flutuante (default #2563eb)
  * data-gate     "claude" (default) = só com ?claude=1 · "always" = sempre visível
+ * data-audio    "0" desliga a zona 🎙️ Áudios (voice notes do WhatsApp transcritas)
+ * data-api      base da API do dashboard p/ as transcrições (default: origem → Tailscale)
  */
 import { createRoot } from 'react-dom/client';
 import { IframeMacLauncher, type IframeMacLauncherProps } from './Launcher';
@@ -21,6 +23,8 @@ const CFG: IframeMacLauncherProps = {
   title: script?.dataset.title || 'Consola dev',
   brand: script?.dataset.brand || '#2563eb',
   gate: (script?.dataset.gate as IframeMacLauncherProps['gate']) || 'claude',
+  audio: script?.dataset.audio !== '0',
+  api: script?.dataset.api || undefined,
 };
 
 function mount() {
