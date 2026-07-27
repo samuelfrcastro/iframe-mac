@@ -46,11 +46,11 @@ const ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd();
 const CHANNEL = process.env.BRIDGE_CHANNEL || "iframe-mac";
 const MODEL = process.env.BRIDGE_MODEL || "";
 // Fallback Fable→Opus: quando o modelo efetivo é o Fable 5 (explícito ou o
-// default do CLI, que na frota é fable), cai para Opus 4.8 se o limite do
+// default do CLI, que na frota é fable), cai para Opus 5 se o limite do
 // Fable bater; o CLI volta a tentar o Fable na invocação seguinte.
 // BRIDGE_FALLBACK_MODEL sobrepõe ("off" desliga).
 const FALLBACK_MODEL = process.env.BRIDGE_FALLBACK_MODEL
-  || ((!MODEL || MODEL === "claude-fable-5") ? "claude-opus-4-8" : "");
+  || ((!MODEL || MODEL === "claude-fable-5") ? "claude-opus-5" : "");
 
 // Modo por defeito (usado quando o frontend não envia payload.mode). Por mensagem,
 // o frontend pode escolher qualquer um dos três: "direct" | "queue" | "terminal".
