@@ -668,10 +668,31 @@ async function handle(payload) {
 }
 
 let heartbeatTimer = null;
+let watchdogTimer = null;
+// Estado do canal + desde quando está saudável. Crash-only: se o canal morre de vez,
+// o daemon sai com exit(1) e o launchd (KeepAlive) relança limpo — em vez de ficar
+// zombie a queimar CPU com channel.send() contra um socket morto.
+let channelStatus = "CONNECTING";
+let lastSubscribedAt = Date.now(); // grace period a contar do arranque
+const DEAD_CHANNEL_MS = 5 * 60_000;
 
 function sendHeartbeat() {
+  if (channelStatus !== "SUBSCRIBED") return; // canal morto: não desperdiçar sends
   channel.send({ type: "broadcast", event: "daemon_online", payload: { ts: Date.now(), project: ROOT } }).catch(() => {});
 }
+
+function checkChannelAlive() {
+  if (channelStatus === "SUBSCRIBED") { lastSubscribedAt = Date.now(); return; }
+  const downMs = Date.now() - lastSubscribedAt;
+  if (downMs >= DEAD_CHANNEL_MS) {
+    console.error(`[bridge] canal morto há ${Math.round(downMs / 60_000)}min (estado: ${channelStatus}) — a sair para o launchd relançar`);
+    clearInterval(heartbeatTimer);
+    clearInterval(watchdogTimer);
+    process.exit(1);
+  }
+}
+
+watchdogTimer = setInterval(checkChannelAlive, 30_000);
 
 // Delay de arranque: dá tempo ao event loop do Bun de estabilizar em contexto launchd
 await new Promise((r) => setTimeout(r, 500));
@@ -703,7 +724,9 @@ channel
   })
   .subscribe((status) => {
     console.log(`[bridge] canal "${CHANNEL}": ${status}`);
+    channelStatus = status;
     if (status === "SUBSCRIBED") {
+      lastSubscribedAt = Date.now();
       console.log(`[bridge] ✓ pronto (projeto: ${ROOT}). Modo default: ${BRIDGE_MODE} · Modelo: ${MODEL || "(default do CLI)"} · Terminal: tmux ${TERM_SESSION}`);
       // Anunciar presença via Presence — o browser usa presenceState() para detectar "online"
       channel.track({ online: true, project: ROOT, ts: Date.now() }).catch(() => {});
@@ -728,11 +751,14 @@ channel
         }
       }
     }
-    if (status === "CLOSED" || status === "CHANNEL_ERROR") {
-      // heartbeat timer kept running so channel.send() retries on reconnect
+    if (status === "CLOSED" || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+      // Regista o momento da falha. O heartbeat fica em silêncio (ver sendHeartbeat) e o
+      // watchdog mata o processo se isto durar mais de 5min — o launchd relança.
+      const downMs = Date.now() - lastSubscribedAt;
+      console.error(`[bridge] canal em ${status} há ${Math.round(downMs / 1000)}s — heartbeat suspenso; watchdog sai em ${Math.max(0, Math.round((DEAD_CHANNEL_MS - downMs) / 1000))}s se não recuperar`);
     }
   });
 
-const bye = () => { clearInterval(heartbeatTimer); supabase.removeAllChannels(); process.exit(0); };
+const bye = () => { clearInterval(heartbeatTimer); clearInterval(watchdogTimer); supabase.removeAllChannels(); process.exit(0); };
 process.on("SIGINT", () => { console.log("\n[bridge] a desligar..."); bye(); });
 process.on("SIGTERM", bye);
